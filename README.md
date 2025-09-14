@@ -1,3 +1,5 @@
+# Dokumentasi
+[![Lihat Demo Proyek di Google Drive](https://raw.githubusercontent.com/nama-anda/repo-anda/main/assets/drive-video-thumb.png)](https://drive.google.com/file/d/1fali_dknPGOCjMLG9yiuttqrGS4o1Gxx/view?usp=sharing)
 # Sistem Antrian
 
 Sistem antrian sederhana yang dibangun dengan Python, Flask, dan antarmuka web. Sistem ini memungkinkan pengguna untuk mengambil nomor antrian untuk berbagai layanan, menampilkan status antrian saat ini di layar publik, dan menyediakan panel kontrol bagi operator untuk mengelola antrian.
