@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mesin Antrian - Kantor Kecamatan</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+
+        :root {
+            --bg-color: #f0f4f8; /* Latar belakang lebih terang */
+            --container-bg: #ffffff; /* Kontainer putih bersih */
+            --primary-color: #2980b9; /* Biru korporat */
+            --text-color-dark: #2c3e50; /* Teks gelap */
+            --text-color-light: #ffffff;
+            --shadow-color: rgba(0, 0, 0, 0.1);
+            --accent-color: #f39c12; /* Warna emas untuk nomor */
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: var(--bg-color);
+            color: var(--text-color-dark);
+            font-family: 'Inter', sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: var(--container-bg);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 15px 30px var(--shadow-color);
+            width: 100%;
+            max-width: 700px;
+            min-height: 450px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            border-top: 10px solid var(--primary-color);
+        }
+
+        /* Tampilan Awal */
+        #initial-view h1 {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+        
+        #initial-view p {
+            font-size: 1.2rem;
+            color: #7f8c8d;
+            margin-bottom: 40px;
+        }
+
+        #generate-button {
+            background-color: var(--primary-color);
+            color: var(--text-color-light);
+            border: none;
+            border-radius: 15px;
+            padding: 25px 40px;
+            font-size: 2rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        #generate-button:hover:not(:disabled) {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(41, 128, 185, 0.3);
+        }
+        
+        #generate-button:disabled {
+            background-color: #bdc3c7;
+            cursor: wait;
+        }
+
+        /* Tampilan Hasil Nomor Antrian */
+        #result-display {
+            display: none; /* Sembunyi secara default */
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        #result-display h2 {
+            font-size: 1.8rem;
+            font-weight: 400;
+        }
+
+        #queue-number {
+            font-size: 9rem;
+            font-weight: 900;
+            color: var(--accent-color);
+            margin: 10px 0;
+            line-height: 1;
+        }
+
+        #service-name {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 30px;
+        }
+        
+        #result-message {
+            font-size: 1.2rem;
+            color: #7f8c8d;
+        }
+        
+        /* Animasi */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Bagian 1: Tombol Generate (Tampil di awal) -->
+        <div id="initial-view">
+            <h1>Selamat Datang di Kantor Kecamatan</h1>
+            <p>Silakan tekan tombol di bawah untuk mendapatkan nomor antrian pelayanan.</p>
+            <button id="generate-button">AMBIL NOMOR ANTRIAN</button>
+        </div>
+
+        <!-- Bagian 2: Hasil Nomor Antrian (Tampil setelah klik tombol) -->
+        <div id="result-display">
+            <h2>Nomor Antrian Anda</h2>
+            <div id="queue-number">-</div>
+            <div id="service-name">-</div>
+            <p id="result-message">Silakan foto layar ini. Halaman akan kembali dalam 15 detik.</p>
+        </div>
+    </div>
+
+    <script>
+        // --- Konfigurasi ---
+        const SERVER_URL = 'http://localhost:5000';
+        // Definisikan satu jenis layanan di sini. Nama ini HARUS SAMA dengan salah satu layanan 
+        // yang ada di variabel AVAILABLE_SERVICES di file queue_server.py Anda.
+        const SERVICE_TYPE = "PELAYANAN UMUM"; 
+        const RESET_TIMEOUT = 15000; // 15 detik
+
+        // Referensi ke elemen-elemen utama di halaman
+        const initialDiv = document.getElementById('initial-view');
+        const resultDiv = document.getElementById('result-display');
+        const generateButton = document.getElementById('generate-button');
+        
+        const queueNumberEl = document.getElementById('queue-number');
+        const serviceNameEl = document.getElementById('service-name');
+
+        /**
+         * Meminta nomor antrian baru dari server untuk layanan yang sudah ditentukan.
+         */
+        async function generateQueue() {
+            // Nonaktifkan tombol dan ubah teks untuk feedback
+            generateButton.disabled = true;
+            generateButton.textContent = 'MEMPROSES...';
+
+            try {
+                const response = await fetch(`${SERVER_URL}/api/queue/new`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ service_type: SERVICE_TYPE })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Gagal membuat nomor antrian.');
+                }
+
+                const data = await response.json();
+                
+                // Jika berhasil, tampilkan nomor antrian
+                showResult(data.queue_number, SERVICE_TYPE);
+
+            } catch (error) {
+                console.error('Error getting queue number:', error);
+                alert('Terjadi kesalahan saat menghubungi server. Silakan coba lagi.');
+                // Jika gagal, kembalikan tombol ke keadaan semula
+                resetView();
+            }
+        }
+
+        /**
+         * Menampilkan layar hasil dengan nomor antrian.
+         * @param {string} queueNumber - Nomor antrian yang didapat (misal: "P-001").
+         * @param {string} serviceType - Nama layanan yang dipilih.
+         */
+        function showResult(queueNumber, serviceType) {
+            queueNumberEl.textContent = queueNumber;
+            serviceNameEl.textContent = serviceType;
+
+            // Tukar tampilan dari tombol ke hasil
+            initialDiv.style.display = 'none';
+            resultDiv.style.display = 'block';
+
+            // Atur timer untuk kembali ke halaman awal secara otomatis
+            setTimeout(resetView, RESET_TIMEOUT);
+        }
+
+        /**
+         * Mengembalikan tampilan ke halaman tombol generate.
+         */
+        function resetView() {
+            resultDiv.style.display = 'none';
+            initialDiv.style.display = 'block';
+            
+            // Aktifkan kembali tombol
+            generateButton.disabled = false;
+            generateButton.textContent = 'AMBIL NOMOR ANTRIAN';
+        }
+
+        // Tambahkan event listener ke tombol saat halaman dimuat
+        document.addEventListener('DOMContentLoaded', () => {
+            generateButton.onclick = generateQueue;
+        });
+    </script>
+</body>
+</html>
+
+

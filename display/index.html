@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="300"> <!-- Refresh halaman setiap 5 menit untuk mencegah masalah cache -->
+    <title>Informasi Antrian</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@700;900&display=swap');
+
+        :root {
+            --bg-color: #2c3e50;
+            --card-bg-color: #34495e;
+            --primary-text-color: #ffffff;
+            --highlight-color: #f1c40f; /* Kuning Emas */
+            --secondary-text-color: #bdc3c7;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            background-color: var(--bg-color);
+            color: var(--primary-text-color);
+            font-family: 'Roboto', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            width: 95%;
+            height: 95%;
+            background-color: var(--card-bg-color);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+
+        .header {
+            text-align: center;
+            padding: 2vh 0;
+            border-bottom: 2px solid #4a627a;
+        }
+
+        .header h1 {
+            font-size: 5vh;
+            margin: 0;
+            font-weight: 900;
+        }
+
+        .main-display {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 2vw;
+            transition: opacity 0.5s ease-in-out;
+        }
+        
+        #current-queue-container.hidden {
+            opacity: 0;
+        }
+
+        .main-display .title {
+            font-size: 6vh;
+            font-weight: 700;
+            color: var(--secondary-text-color);
+            margin-bottom: 2vh;
+        }
+
+        .main-display .queue-number {
+            font-size: 35vh;
+            font-weight: 900;
+            color: var(--highlight-color);
+            line-height: 1;
+            margin: 0;
+        }
+
+        .main-display .service-type {
+            font-size: 8vh;
+            font-weight: 700;
+            margin-top: 3vh;
+        }
+        
+        #placeholder {
+            font-size: 8vh;
+            color: var(--secondary-text-color);
+            transition: opacity 0.5s ease-in-out;
+        }
+        
+        #placeholder.hidden {
+            display: none;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>INFORMASI NOMOR ANTRIAN</h1>
+        </header>
+
+        <main class="main-display">
+            <!-- Placeholder saat tidak ada antrian dipanggil -->
+            <div id="placeholder">
+                <h2>Menunggu Panggilan...</h2>
+            </div>
+
+            <!-- Konten utama saat ada antrian dipanggil -->
+            <div id="current-queue-container" class="hidden">
+                <p class="title">NOMOR ANTRIAN</p>
+                <h2 id="queue-number" class="queue-number">-</h2>
+                <p id="service-type" class="service-type">-</p>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // --- KONFIGURASI ---
+        // Ganti 'localhost' dengan alamat IP server jika diakses dari perangkat berbeda.
+        const SERVER_URL = `http://${window.location.hostname}:5000`;
+        const REFRESH_INTERVAL_MS = 3000; // Refresh data setiap 3 detik
+
+        const queueNumberEl = document.getElementById('queue-number');
+        const serviceTypeEl = document.getElementById('service-type');
+        const placeholderEl = document.getElementById('placeholder');
+        const currentQueueContainerEl = document.getElementById('current-queue-container');
+
+        let lastCalledQueueNumber = null;
+
+        async function updateDisplay() {
+            try {
+                const response = await fetch(`${SERVER_URL}/api/display/current`);
+                if (!response.ok) {
+                    throw new Error(`Network response was not ok: ${response.statusText}`);
+                }
+                const data = await response.json();
+
+                if (data.success && data.called_queues && data.called_queues.length > 0) {
+                    // **PERBAIKAN:** Urutkan antrian berdasarkan waktu panggil (terbaru lebih dulu)
+                    const sortedQueues = data.called_queues.sort((a, b) => {
+                        // Ubah timestamp menjadi objek Date untuk perbandingan yang akurat
+                        const dateA = new Date(a.called_at);
+                        const dateB = new Date(b.called_at);
+                        return dateB - dateA; // Urutkan secara descending (terbaru di atas)
+                    });
+
+                    // Ambil antrian terbaru yang dipanggil (paling atas setelah diurutkan)
+                    const latestQueue = sortedQueues[0];
+                    
+                    placeholderEl.classList.add('hidden');
+                    currentQueueContainerEl.classList.remove('hidden');
+
+                    // Hanya update jika nomornya berbeda untuk efek visual
+                    if (latestQueue.queue_number !== lastCalledQueueNumber) {
+                        lastCalledQueueNumber = latestQueue.queue_number;
+                        
+                        // Efek fade out-in untuk update
+                        currentQueueContainerEl.style.opacity = '0';
+                        setTimeout(() => {
+                            queueNumberEl.textContent = latestQueue.queue_number;
+                            serviceTypeEl.textContent = `LOKET ${latestQueue.service_type}`;
+                            currentQueueContainerEl.style.opacity = '1';
+                        }, 500);
+                    }
+                    
+                } else {
+                    // Tampilkan placeholder jika tidak ada antrian yang dipanggil
+                    lastCalledQueueNumber = null;
+                    placeholderEl.classList.remove('hidden');
+                    currentQueueContainerEl.classList.add('hidden');
+                }
+            } catch (error) {
+                console.error("Gagal mengambil data display:", error);
+                // Jika error, tampilkan placeholder
+                lastCalledQueueNumber = null;
+                placeholderEl.classList.remove('hidden');
+                currentQueueContainerEl.classList.add('hidden');
+            }
+        }
+
+        // Jalankan update saat halaman pertama kali dimuat
+        document.addEventListener('DOMContentLoaded', () => {
+            updateDisplay();
+            // Atur interval untuk refresh data secara otomatis
+            setInterval(updateDisplay, REFRESH_INTERVAL_MS);
+        });
+
+    </script>
+</body>
+</html>
+
